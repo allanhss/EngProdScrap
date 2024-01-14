@@ -162,3 +162,4 @@ cython_debug/
 paths.py
 PRO03.xlsx
 Historico.xlsx
+.vscode/
