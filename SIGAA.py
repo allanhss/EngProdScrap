@@ -18,7 +18,11 @@ class Historico:
 
 class PerfilCurricular:
     def __init__(self, perfilCurricular):
-        self.df = perfilCurricular
+        self.df = perfilCurricular.applymap(
+            lambda x: [i for i in x.strip("[]").replace("", "").split(", ") if i != ""]
+            if isinstance(x, str)
+            else x
+        )
 
 
 class SIGAA:

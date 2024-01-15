@@ -1,45 +1,71 @@
+import pandas as pd
+from typing import Literal
+import os
+import paths
+from SIGAA import SIGAA
 
 
 class Obsidian:
-    def MDFile(self,):
+    def __init__(self, folder):
+        self.folder = folder
+        if not os.path.exists(self.folder):
+            os.makedirs(self.folder)
 
-    def toMD(self, ):
+    def perfilToMD(self, subjectsDF):
+        self.subjects = [ObsidianMD(subjectsDF.loc[subj]) for subj in subjectsDF.T]
 
-class ObsidianMD (Obsidian):
-    def FormatSubjectData(subjectData):
+    def saveMD(self):
+        for subject in self.subjects:
+            with open(f"{self.folder}\\{subject.nome}.md", "w", encoding="utf-8") as f:
+                f.write(subject.MD)
+
+
+class ObsidianMD(Obsidian):
+    def __init__(self, subject):
+        self.nome = subject.name
+        self.periodo = subject["Período"]
+        self.tipo = "".join(subject["Tipo"]).replace("'", "")
+        self.chTotal = subject["CH Total"]
+        self.preReq = self._FormatSubjectData(subject["Pré-Requisitos"])
+        self.coReq = self._FormatSubjectData(subject["Co-Requisitos"])
+        self.equiv = self._FormatSubjectData(subject["Equivalências"])
+        self.ementa = "".join(subject["Ementa"]).replace("'", "")
+        self.subject = self.SubjectToMD()
+
+    def SubjectToMD(self):
+        self.MD = f"""|**Período**|**Tipo**|**CH Total**|
+|-|-|-|
+| {self.periodo} | {self.tipo} | {self.chTotal} |
+##### Pré-Requisitos
+{self.preReq}
+##### Có-Requisitos
+{self.coReq}
+##### Equivalências
+{self.equiv}
+##### Ementa
+{self.ementa}
+"""
+
+    def _FormatSubjectData(self, subjectData):
         if isinstance(subjectData, list):
             if not subjectData:
                 return ""
             else:
                 return str("[[" + "]], [[".join(subjectData) + "]]").replace("'", "")
+                # codes = [data.split(" - ")[0].replace("'", "") for data in subjectData]
+                # return ", ".join(f"[[{code}]]" for code in codes)
         return subjectData
 
-    def SubjectToMD(subjectDF):
-        global SumPeriodos
-        CODIGO, NOME, *_ = subjectDF.name.split(" - ")
-        periodo = subjectDF["Período"]
-        conteudo = f"""### {NOME}
-    |**Período**|**Tipo**|**CH Total**|
-    |-|-|-|
-    | {periodo} | {''.join(subjectDF['Tipo']).replace("'", "")} | {subjectDF['CH Total']} |
-    ##### Pré-Requisitos
-    {FormatSubjectData(subjectDF['Pré-Requisitos'])}
-    ##### Có-Requisitos
-    {FormatSubjectData(subjectDF['Co-Requisitos'])}
-    ##### Equivalências
-    {FormatSubjectData(subjectDF['Equivalências'])}
-    ##### Ementa
-    {''.join(subjectDF['Ementa']).replace("'", "")}
-    """
-        with open(f"{ObsidianFolder}Subjects\\{CODIGO}.md", "w", encoding="utf-8") as f:
-            f.write(conteudo)
 
-class ObsidianCanvas (Obsidian):
-    CANVAS_Y = [0] * 11
-    Nodes = pd.DataFrame(index=["color", "x", "y", "nome"])
-    Edges = pd.DataFrame(index=["fromNode", "fromSide", "toNode", "toSide", "color"])
+class ObsidianCanvas(Obsidian):
+    def __init__(self):
+        self.CANVAS_Y = [0] * 11
+        self.Nodes = pd.DataFrame(index=["color", "x", "y", "nome"])
+        self.Edges = pd.DataFrame(
+            index=["fromNode", "fromSide", "toNode", "toSide", "color"]
+        )
 
-    def SetNode(id: str, x: int, y: int, color=0, nome: str = ""):
+    def _SetNode(id: str, x: int, y: int, color=0, nome: str = ""):
         if len(nome) < 25:
             height = 220
         elif len(nome) < 50:
@@ -48,8 +74,8 @@ class ObsidianCanvas (Obsidian):
             height = 300
         return f'{{"id":"{id}","type":"file","file":"PlanoMaterias/Subjects/{id}.md","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
 
-
-    def SetEdge(
+    def _SetEdge(
+        self,
         id: str,
         fromNode: str,
         fromSide: Literal["top", "bottom", "left", "right"],
@@ -58,9 +84,8 @@ class ObsidianCanvas (Obsidian):
         color=0,
     ):
         return f'{{"id":"{id}","fromNode":"{fromNode}","fromSide":"{fromSide}","toNode":"{toNode}","toSide":"{toSide}","toEnd":"none","color":"{color}"}}'
-    
-    def SubjectToCANVAS(subjectDF):
-        global CANVAS_Y
+
+    def SubjectToCANVAS(self, subjectDF):
         CODIGO, NOME, *_ = subjectDF.name.split(" - ")
         PERIODO = int(subjectDF["Período"])
         TIPO = "".join(subjectDF["Tipo"]).replace("'", "")
@@ -73,16 +98,16 @@ class ObsidianCanvas (Obsidian):
             color = 6
         else:
             color = PERIODO % 2 + 4
-        Nodes[CODIGO] = [
+        self.Nodes[CODIGO] = [
             color,
             600 * PERIODO,
-            CANVAS_Y[PERIODO],
+            self.CANVAS_Y[PERIODO],
             NOME,
         ]
-        CANVAS_Y[PERIODO] += 500
+        self.CANVAS_Y[PERIODO] += 500
 
         for preReq in preRequisitos:
-            Edges[f"{CODIGO}-{preReq}"] = [
+            self.Edges[f"{CODIGO}-{preReq}"] = [
                 CODIGO,
                 "left",
                 preReq,
@@ -90,102 +115,100 @@ class ObsidianCanvas (Obsidian):
                 0 if preReq in aprovadas else 1,
             ]
 
+    def OrganizeCANVAS(self):
+        # Set Color by Needed
+        sumPreRequisitos = pd.Series(
+            [self.Edges[edge]["toNode"] for edge in self.Edges]
+        ).value_counts()
+
+        for subject in sumPreRequisitos.keys():
+            selectedSubjects = [
+                self.Edges[edge].name
+                for edge in self.Edges
+                if self.Edges[edge]["toNode"] == subject
+            ]
+            for edge in selectedSubjects:
+                if self.Edges[edge]["color"] != 0:
+                    if sumPreRequisitos[subject] > 2:
+                        self.Edges[edge]["color"] = 1
+                    elif sumPreRequisitos[subject] > 1:
+                        self.Edges[edge]["color"] = 2
+                    else:
+                        self.Edges[edge]["color"] = 4
+            print("self.Edges ajustadas")
+
+            # Order Y by sumPreRequisitos
+            sortedSubjects = sumPreRequisitos.sort_values(ascending=False)
+            periodos = self.Nodes.loc["x"].unique()
+
+            for periodo in periodos:
+                subjects_in_period = self.Nodes.columns[self.Nodes.loc["x"] == periodo]
+                subjects_series = pd.Series(
+                    {
+                        subject: sortedSubjects[subject]
+                        if subject in sortedSubjects
+                        else 0
+                        for subject in subjects_in_period
+                    }
+                )
+                subjects_in_period = subjects_series.sort_values(ascending=False).index
+
+                for i, subject in enumerate(subjects_in_period):
+                    x_coord = self.Nodes.loc["x", subject]
+                    y_coord = 500 * i
+                    self.Nodes.loc["y", subject] = y_coord
+            print("self.Nodes reordenados")
+
+    def SaveCANVAS(self):
+        subjectCanva = """{
+            "self.nodes":[
+                %s
+            ],
+            "self.edges":[
+                %s
+            ]
+        }""" % (
+            ",\n\t\t".join(
+                [
+                    self._SetNode(
+                        id=self.Nodes[node].name,
+                        x=self.Nodes[node]["x"],
+                        y=self.Nodes[node]["y"],
+                        color=self.Nodes[node]["color"],
+                        nome=self.Nodes[node]["nome"],
+                    )
+                    for node in self.Nodes
+                ]
+            ),
+            ",\n\t\t".join(
+                [
+                    self._SetEdge(
+                        id=self.Edges[edge].name,
+                        fromNode=self.Edges[edge]["fromNode"],
+                        fromSide=self.Edges[edge]["fromSide"],
+                        toNode=self.Edges[edge]["toNode"],
+                        toSide=self.Edges[edge]["toSide"],
+                        color=self.Edges[edge]["color"],
+                    )
+                    for edge in self.Edges
+                ]
+            ),
+        )
+        with open(f"{self.folder}PR03.canvas", "w", encoding="utf-8") as f:
+            f.write(subjectCanva)
+
+
 if __name__ == "__main__":
-    # Histórico
-    historico = pd.read_excel("Historico.xlsx", index_col=0)
-    aprovadas = [
-        i.split(" - ")[0]
-        for i in historico.loc[
-            historico["Situação"].isin(["APROVADO POR MÉDIA", "DISPENSADO"])
-        ].index
-    ]
-    print("Histórico Processado")
-    # Perfil
-    PerfilCurricular = pd.read_excel("PRO03.xlsx", index_col=0).T
-    PerfilCurricular = PerfilCurricular.applymap(
-        lambda x: [i for i in x.strip("[]").replace("", "").split(", ") if i != ""]
-        if isinstance(x, str)
-        else x
-    )
+    siga = SIGAA()
+    aprovadas = siga.historico.aprovadas
+    PerfilCurricular = siga.curriculo.df
     print("Grade Processada")
 
-    
-# Subject to MD
-for subject in PerfilCurricular:
-    SubjectToMD(PerfilCurricular[subject])
-    SubjectToCANVAS(PerfilCurricular[subject])
-print("Cards Gerados")
-
-# Set Color by Needed
-sumPreRequisitos = pd.Series([Edges[edge]["toNode"] for edge in Edges]).value_counts()
-for subject in sumPreRequisitos.keys():
-    selectedSubjects = [
-        Edges[edge].name for edge in Edges if Edges[edge]["toNode"] == subject
-    ]
-    for edge in selectedSubjects:
-        if Edges[edge]["color"] != 0:
-            if sumPreRequisitos[subject] > 2:
-                Edges[edge]["color"] = 1
-            elif sumPreRequisitos[subject] > 1:
-                Edges[edge]["color"] = 2
-            else:
-                Edges[edge]["color"] = 4
-    print("Edges ajustadas")
-
-    # Order Y by sumPreRequisitos
-    sortedSubjects = sumPreRequisitos.sort_values(ascending=False)
-    periodos = Nodes.loc["x"].unique()
-
-    for periodo in periodos:
-        subjects_in_period = Nodes.columns[Nodes.loc["x"] == periodo]
-        subjects_series = pd.Series(
-            {
-                subject: sortedSubjects[subject] if subject in sortedSubjects else 0
-                for subject in subjects_in_period
-            }
-        )
-        subjects_in_period = subjects_series.sort_values(ascending=False).index
-
-        for i, subject in enumerate(subjects_in_period):
-            x_coord = Nodes.loc["x", subject]
-            y_coord = 500 * i
-            Nodes.loc["y", subject] = y_coord
-    print("Nodes reordenados")
-
-    subjectCanva = """{
-        "nodes":[
-            %s
-        ],
-        "edges":[
-            %s
-        ]
-    }""" % (
-        ",\n\t\t".join(
-            [
-                SetNode(
-                    id=Nodes[node].name,
-                    x=Nodes[node]["x"],
-                    y=Nodes[node]["y"],
-                    color=Nodes[node]["color"],
-                    nome=Nodes[node]["nome"],
-                )
-                for node in Nodes
-            ]
-        ),
-        ",\n\t\t".join(
-            [
-                SetEdge(
-                    id=Edges[edge].name,
-                    fromNode=Edges[edge]["fromNode"],
-                    fromSide=Edges[edge]["fromSide"],
-                    toNode=Edges[edge]["toNode"],
-                    toSide=Edges[edge]["toSide"],
-                    color=Edges[edge]["color"],
-                )
-                for edge in Edges
-            ]
-        ),
+    obsidian = Obsidian(
+        folder=paths.ObsidianFolder
+        if hasattr(paths, "ObsidianFolder")
+        else f"Obsidian\\"
     )
-
-    with open(f"{ObsidianFolder}PR03.canvas", "w", encoding="utf-8") as f:
-        f.write(subjectCanva)
+    obsidian.perfilToMD(PerfilCurricular)
+    obsidian.saveMD()
+    ...

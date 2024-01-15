@@ -159,8 +159,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-paths.py
-PRO03.xlsx
-Historico.xlsx
 .vscode/
-.data/
+paths.py
+data/
+Obsidian/
