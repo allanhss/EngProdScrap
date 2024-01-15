@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import Literal
 import os
+import re
 import paths
 from SIGAA import SIGAA
 
@@ -12,25 +13,43 @@ class Obsidian:
             os.makedirs(self.folder)
 
     def perfilToMD(self, subjectsDF):
-        self.subjects = [ObsidianMD(subjectsDF.loc[subj]) for subj in subjectsDF.T]
+        self.subjects = [
+            ObsidianMD(subjectsDF.loc[subj], how="fromDF") for subj in subjectsDF.T
+        ]
 
     def saveMD(self):
         for subject in self.subjects:
             with open(f"{self.folder}\\{subject.nome}.md", "w", encoding="utf-8") as f:
                 f.write(subject.MD)
 
+    def getMD(self):
+        self.subjects = []
+        for root, dirs, files in os.walk(self.folder):
+            for file in files:
+                if os.path.splitext(file)[1] == ".md":
+                    self.subjects.append(
+                        ObsidianMD(os.path.join(root, file), how="fromMD")
+                    )
+
 
 class ObsidianMD(Obsidian):
-    def __init__(self, subject):
-        self.nome = subject.name
-        self.periodo = subject["Período"]
-        self.tipo = "".join(subject["Tipo"]).replace("'", "")
-        self.chTotal = subject["CH Total"]
-        self.preReq = self._FormatSubjectData(subject["Pré-Requisitos"])
-        self.coReq = self._FormatSubjectData(subject["Co-Requisitos"])
-        self.equiv = self._FormatSubjectData(subject["Equivalências"])
-        self.ementa = "".join(subject["Ementa"]).replace("'", "")
-        self.subject = self.SubjectToMD()
+    def __init__(self, subject, how: str):
+        if how == "fromMD":
+            with open(subject, "r", encoding="utf-8") as f:
+                self.MD = f.read()
+                self.nome = subject.split("\\")[-1].replace(".md", "")
+                self.mdToSubject()
+
+        elif how == "fromDF":
+            self.nome = subject.name
+            self.periodo = subject["Período"]
+            self.tipo = "".join(subject["Tipo"]).replace("'", "")
+            self.chTotal = subject["CH Total"]
+            self.preReq = self._FormatSubjectData(subject["Pré-Requisitos"])
+            self.coReq = self._FormatSubjectData(subject["Co-Requisitos"])
+            self.equiv = self._FormatSubjectData(subject["Equivalências"])
+            self.ementa = "".join(subject["Ementa"]).replace("'", "")
+            self.SubjectToMD()
 
     def SubjectToMD(self):
         self.MD = f"""|**Período**|**Tipo**|**CH Total**|
@@ -46,12 +65,53 @@ class ObsidianMD(Obsidian):
 {self.ementa}
 """
 
+    def mdToSubject(self):
+        # Extract values using regular expressions
+        data = {}
+        header_pattern = r"\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|"
+        match = re.findall(header_pattern, self.MD)
+        if match:
+            data["Período"], data["Tipo"], data["CH Total"] = match[-1]
+
+        for item in ["Pré-Requisitos", "Co-Requisitos", "Equivalências"]:
+            subjects_patter = f"{item}\\n(.*)?\\n"
+            data[item] = re.findall(subjects_patter, self.MD)
+
+        data["Ementa"] = re.findall(r"Ementa\n(.*)\n", self.MD)
+
+        self.periodo = int(data["Período"])
+        self.tipo = data["Tipo"]
+        self.chTotal = int(data["CH Total"])
+        self.preReq = self._MDFileNameToList(
+            [i for i in data["Pré-Requisitos"]][0]
+            if len(data["Pré-Requisitos"]) != 0
+            else ""
+        )
+        self.coReq = self._MDFileNameToList(
+            [i for i in data["Co-Requisitos"]][0]
+            if len(data["Co-Requisitos"]) != 0
+            else ""
+        )
+        self.equiv = self._MDFileNameToList(
+            [i for i in data["Equivalências"]][0]
+            if len(data["Equivalências"]) != 0
+            else ""
+        )
+        self.ementa = data["Ementa"][0]
+
+    def _MDFileNameToList(self, string):
+        if string:
+            pattern = r"\[\[(.*?)\]\]"
+            matches = re.findall(pattern, string)
+            return matches
+
     def _FormatSubjectData(self, subjectData):
         if isinstance(subjectData, list):
             if not subjectData:
                 return ""
             else:
                 return str("[[" + "]], [[".join(subjectData) + "]]").replace("'", "")
+                # Retorna apenas os códigos
                 # codes = [data.split(" - ")[0].replace("'", "") for data in subjectData]
                 # return ", ".join(f"[[{code}]]" for code in codes)
         return subjectData
@@ -210,5 +270,5 @@ if __name__ == "__main__":
         else f"Obsidian\\"
     )
     obsidian.perfilToMD(PerfilCurricular)
-    obsidian.saveMD()
+    obsidian.getMD()
     ...
