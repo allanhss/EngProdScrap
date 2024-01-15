@@ -7,23 +7,27 @@ from SIGAA import SIGAA
 
 
 class Obsidian:
-    def __init__(self, folder):
+    def __init__(self, folder, *gradeDF):
         self.folder = folder
         if not os.path.exists(self.folder):
+            # Cria diretório caso não exista
             os.makedirs(self.folder)
+            if not gradeDF:
+                raise KeyError(AttributeError)
+            self.perfilToMD(gradeDF)
+        elif not gradeDF:
+            self.getMD()
+        self.subjDF = self.getSubjectsDF()
 
-    def perfilToMD(self, subjectsDF):
+    # Cria subject.md a partir da grade no Excel
+    def perfilToMD(self, excelDF):
         self.subjects = [
-            ObsidianMD(subjectsDF.loc[subj], how="fromExcel") for subj in subjectsDF.T
+            ObsidianMD(excelDF.loc[subj], how="fromExcel") for subj in excelDF.T
         ]
-        self.saveMD()
+        self._saveMD()
         return self.subjects
 
-    def saveMD(self):
-        for subject in self.subjects:
-            with open(f"{self.folder}\\{subject.nome}.md", "w", encoding="utf-8") as f:
-                f.write(subject.MD)
-
+    # Importa subjects dos arquivos subject.md
     def getMD(self):
         self.subjects = []
         for root, dirs, files in os.walk(self.folder):
@@ -38,7 +42,7 @@ class Obsidian:
         for subject in self.subjects:
             ObsidianCanvas(subject)
 
-    def subjectsDF(self):
+    def getSubjectsDF(self):
         subjDF = pd.DataFrame(
             index=[
                 "Tipo",
@@ -62,6 +66,11 @@ class Obsidian:
             }
         return subjDF.fillna("")
 
+    def _saveMD(self):
+        for subject in self.subjects:
+            with open(f"{self.folder}\\{subject.nome}.md", "w", encoding="utf-8") as f:
+                f.write(subject.MD)
+
 
 class ObsidianMD(Obsidian):
     def __init__(self, subject, how: str):
@@ -80,18 +89,18 @@ class ObsidianMD(Obsidian):
             self.coReq = [i.replace("'", "") for i in subject["Co-Requisitos"]]
             self.equiv = [i.replace("'", "") for i in subject["Equivalências"]]
             self.ementa = "".join(subject["Ementa"]).replace("'", "")
-            self.SubjectToMD()
+            self.subjectToMD()
 
-    def SubjectToMD(self):
+    def subjectToMD(self):
         self.MD = f"""|**Período**|**Tipo**|**CH Total**|
 |-|-|-|
 | {self.periodo} | {self.tipo} | {self.chTotal} |
 ##### Pré-Requisitos
-{self._FormatSubjectData(self.preReq)}
+{self._formatSubjectData(self.preReq)}
 ##### Có-Requisitos
-{self._FormatSubjectData(self.coReq)}
+{self._formatSubjectData(self.coReq)}
 ##### Equivalências
-{self._FormatSubjectData(self.equiv)}
+{self._formatSubjectData(self.equiv)}
 ##### Ementa
 {self.ementa}
 """
@@ -113,30 +122,30 @@ class ObsidianMD(Obsidian):
         self.periodo = int(data["Período"])
         self.tipo = data["Tipo"]
         self.chTotal = int(data["CH Total"])
-        self.preReq = self._MDFileNameToList(
+        self.preReq = self._mdFileNameToList(
             [i for i in data["Pré-Requisitos"]][0]
             if len(data["Pré-Requisitos"]) != 0
             else ""
         )
-        self.coReq = self._MDFileNameToList(
+        self.coReq = self._mdFileNameToList(
             [i for i in data["Co-Requisitos"]][0]
             if len(data["Co-Requisitos"]) != 0
             else ""
         )
-        self.equiv = self._MDFileNameToList(
+        self.equiv = self._mdFileNameToList(
             [i for i in data["Equivalências"]][0]
             if len(data["Equivalências"]) != 0
             else ""
         )
         self.ementa = data["Ementa"][0]
 
-    def _MDFileNameToList(self, string):
+    def _mdFileNameToList(self, string):
         if string:
             pattern = r"\[\[(.*?)\]\]"
             matches = re.findall(pattern, string)
             return matches
 
-    def _FormatSubjectData(self, subjectData):
+    def _formatSubjectData(self, subjectData):
         if isinstance(subjectData, list):
             if not subjectData:
                 return ""
@@ -298,11 +307,8 @@ if __name__ == "__main__":
     obsidian = Obsidian(
         folder=paths.ObsidianFolder
         if hasattr(paths, "ObsidianFolder")
-        else f"Obsidian\\"
+        else f"Obsidian\\",
+        gradeDF=PerfilCurricular,
     )
-    obsidian.perfilToMD(PerfilCurricular)
-    perfilMD = obsidian.subjectsDF()
-    obsidian.getMD()
-    perfilRead = obsidian.subjectsDF()
 
     ...
