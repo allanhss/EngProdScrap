@@ -243,7 +243,7 @@ class SIGAA:
                 continue
             elif "Equivalências" in data:
                 if "Não exist" in data[1]:
-                    subject["Equivalências"] = [""]
+                    subject["Equivalências"] = []
                     equivalON = False
                 else:
                     subject["Equivalências"] = []

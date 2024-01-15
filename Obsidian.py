@@ -14,8 +14,10 @@ class Obsidian:
 
     def perfilToMD(self, subjectsDF):
         self.subjects = [
-            ObsidianMD(subjectsDF.loc[subj], how="fromDF") for subj in subjectsDF.T
+            ObsidianMD(subjectsDF.loc[subj], how="fromExcel") for subj in subjectsDF.T
         ]
+        self.saveMD()
+        return self.subjects
 
     def saveMD(self):
         for subject in self.subjects:
@@ -30,6 +32,35 @@ class Obsidian:
                     self.subjects.append(
                         ObsidianMD(os.path.join(root, file), how="fromMD")
                     )
+        return self.subjects
+
+    def saveCanvas(self):
+        for subject in self.subjects:
+            ObsidianCanvas(subject)
+
+    def subjectsDF(self):
+        subjDF = pd.DataFrame(
+            index=[
+                "Tipo",
+                "Período",
+                "CH Total",
+                "Pré-Requisitos",
+                "Co-Requisitos",
+                "Equivalências",
+                "Ementa",
+            ]
+        )
+        for subject in self.subjects:
+            subjDF[subject.nome] = {
+                "Tipo": subject.tipo,
+                "Período": subject.periodo,
+                "CH Total": subject.chTotal,
+                "Pré-Requisitos": subject.preReq,
+                "Co-Requisitos": subject.coReq,
+                "Equivalências": subject.equiv,
+                "Ementa": subject.ementa,
+            }
+        return subjDF.fillna("")
 
 
 class ObsidianMD(Obsidian):
@@ -40,14 +71,14 @@ class ObsidianMD(Obsidian):
                 self.nome = subject.split("\\")[-1].replace(".md", "")
                 self.mdToSubject()
 
-        elif how == "fromDF":
+        elif how == "fromExcel":
             self.nome = subject.name
             self.periodo = subject["Período"]
             self.tipo = "".join(subject["Tipo"]).replace("'", "")
             self.chTotal = subject["CH Total"]
-            self.preReq = self._FormatSubjectData(subject["Pré-Requisitos"])
-            self.coReq = self._FormatSubjectData(subject["Co-Requisitos"])
-            self.equiv = self._FormatSubjectData(subject["Equivalências"])
+            self.preReq = [i.replace("'", "") for i in subject["Pré-Requisitos"]]
+            self.coReq = [i.replace("'", "") for i in subject["Co-Requisitos"]]
+            self.equiv = [i.replace("'", "") for i in subject["Equivalências"]]
             self.ementa = "".join(subject["Ementa"]).replace("'", "")
             self.SubjectToMD()
 
@@ -56,11 +87,11 @@ class ObsidianMD(Obsidian):
 |-|-|-|
 | {self.periodo} | {self.tipo} | {self.chTotal} |
 ##### Pré-Requisitos
-{self.preReq}
+{self._FormatSubjectData(self.preReq)}
 ##### Có-Requisitos
-{self.coReq}
+{self._FormatSubjectData(self.coReq)}
 ##### Equivalências
-{self.equiv}
+{self._FormatSubjectData(self.equiv)}
 ##### Ementa
 {self.ementa}
 """
@@ -270,5 +301,8 @@ if __name__ == "__main__":
         else f"Obsidian\\"
     )
     obsidian.perfilToMD(PerfilCurricular)
+    perfilMD = obsidian.subjectsDF()
     obsidian.getMD()
+    perfilRead = obsidian.subjectsDF()
+
     ...
