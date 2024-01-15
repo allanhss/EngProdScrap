@@ -12,6 +12,7 @@ class Obsidian:
         if not os.path.exists(self.folder):
             # Cria diretório caso não exista
             os.makedirs(self.folder)
+            os.makedirs(f"{self.folder}Subjects")
             if gradeDF is None:
                 raise KeyError(AttributeError)
             self.perfilToMD(gradeDF)
@@ -21,12 +22,13 @@ class Obsidian:
             self.perfilToMD(gradeDF)
         self.subjDF = self.getSubjectsDF()
 
-        #Inclui Histórico no DF
+        # Inclui Histórico no DF
         if historicoDF is not None:
             self.subjDF = pd.concat(
                 [self.subjDF, historicoDF.aprovadas.T.fillna("APV")]
             ).fillna("")
-        ...
+
+        self.dfToCanvas()
 
     # Cria subject.md a partir da grade no Excel
     def perfilToMD(self, excelDF):
@@ -47,9 +49,8 @@ class Obsidian:
                     )
         return self.subjects
 
-    def saveCanvas(self):
-        for subject in self.subjects:
-            ObsidianCanvas(subject)
+    def dfToCanvas(self):
+        self.canvas = ObsidianCanvas(self.subjDF, folder=self.folder)
 
     def getSubjectsDF(self):
         subjDF = pd.DataFrame(
@@ -77,16 +78,18 @@ class Obsidian:
 
     def _saveMD(self):
         for subject in self.subjects:
-            with open(f"{self.folder}\\{subject.nome}.md", "w", encoding="utf-8") as f:
+            with open(
+                f"{self.folder}Subjects\\{subject.nome}.md", "w", encoding="utf-8"
+            ) as f:
                 f.write(subject.MD)
 
 
 class ObsidianMD(Obsidian):
-    def __init__(self, subject, how: str):
+    def __init__(self, subject, how: str, path=f"Obsidian\\Subjects"):
         if how == "fromMD":
-            with open(subject, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 self.MD = f.read()
-                self.nome = subject.split("\\")[-1].replace(".md", "")
+                self.nome = path.split("\\")[-1].replace(".md", "")
                 self.mdToSubject()
 
         elif how == "fromExcel":
@@ -167,24 +170,59 @@ class ObsidianMD(Obsidian):
 
 
 class ObsidianCanvas(Obsidian):
-    def __init__(self):
+    def __init__(self, subjDF, folder=f"Obsidian"):
+        self.folder = folder
         self.CANVAS_Y = [0] * 11
-        self.Nodes = pd.DataFrame(index=["color", "x", "y", "nome"])
-        self.Edges = pd.DataFrame(
-            index=["fromNode", "fromSide", "toNode", "toSide", "color"]
-        )
+        self.Nodes = {}
+        self.Edges = {}
 
-    def _SetNode(id: str, x: int, y: int, color=0, nome: str = ""):
+        for subj in subjDF:
+            self._setNode(subjDF[subj])
+            self._setEdge(subjDF[subj])
+
+        self.saveCanvas()
+
+    def _setNode(self, subj):
+        if subj["Tipo"] == "OPTATIVO":
+            color = 6
+        elif subj["Média"] != None:
+            color = 0
+        else:
+            color = subj["Périodo"] % 2 + 4
+        self.Nodes[subj.name] = {
+            "id": subj.name,
+            "x": 600 * subj["Período"],
+            "y": self.CANVAS_Y[subj["Período"]],
+            "color": color,
+            "nome": subj.name.split("-")[1],
+        }
+        self.CANVAS_Y[subj["Período"]] += 500
+
+    def _setEdge(self, subj):
+        if len(subj["Pré-Requisitos"]) > 1:
+            for preReq in subj["Pré-Requisitos"]:
+                self.Edges[f'{subj.name.split("-")[0]}- {preReq.split("-")[0]}'] = {
+                    "fromNode": subj.name,
+                    "fromSide": "left",
+                    "toNode": subj["Pré-Requisitos"],
+                    "toSide": "right",
+                    "color": 0 if subj["Média"] != None else 1,
+                }
+
+    @staticmethod
+    def _saveNode(
+        id: str, x: int, y: int, color=0, nome: str = "", folder=f"Obsidian\\Subjects\\"
+    ):
         if len(nome) < 25:
             height = 220
         elif len(nome) < 50:
             height = 260
         else:
             height = 300
-        return f'{{"id":"{id}","type":"file","file":"PlanoMaterias/Subjects/{id}.md","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
+        return f'{{"id":"{id}","type":"file","file":"{folder}{id}.md","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
 
-    def _SetEdge(
-        self,
+    @staticmethod
+    def _saveEdge(
         id: str,
         fromNode: str,
         fromSide: Literal["top", "bottom", "left", "right"],
@@ -193,36 +231,6 @@ class ObsidianCanvas(Obsidian):
         color=0,
     ):
         return f'{{"id":"{id}","fromNode":"{fromNode}","fromSide":"{fromSide}","toNode":"{toNode}","toSide":"{toSide}","toEnd":"none","color":"{color}"}}'
-
-    def SubjectToCANVAS(self, subjectDF):
-        CODIGO, NOME, *_ = subjectDF.name.split(" - ")
-        PERIODO = int(subjectDF["Período"])
-        TIPO = "".join(subjectDF["Tipo"]).replace("'", "")
-        preRequisitos = [i.replace("'", "") for i in subjectDF["Pré-Requisitos"]]
-        coRequisitos = [i.replace("'", "") for i in subjectDF["Co-Requisitos"]]
-        equivalencias = [i.replace("'", "") for i in subjectDF["Equivalências"]]
-        if CODIGO in aprovadas:
-            color = 0
-        elif TIPO == "OPTATIVO":
-            color = 6
-        else:
-            color = PERIODO % 2 + 4
-        self.Nodes[CODIGO] = [
-            color,
-            600 * PERIODO,
-            self.CANVAS_Y[PERIODO],
-            NOME,
-        ]
-        self.CANVAS_Y[PERIODO] += 500
-
-        for preReq in preRequisitos:
-            self.Edges[f"{CODIGO}-{preReq}"] = [
-                CODIGO,
-                "left",
-                preReq,
-                "right",
-                0 if preReq in aprovadas else 1,
-            ]
 
     def OrganizeCANVAS(self):
         # Set Color by Needed
@@ -268,31 +276,32 @@ class ObsidianCanvas(Obsidian):
                     self.Nodes.loc["y", subject] = y_coord
             print("self.Nodes reordenados")
 
-    def SaveCANVAS(self):
+    def saveCanvas(self):
         subjectCanva = """{
-            "self.nodes":[
+        "nodes":[
                 %s
             ],
-            "self.edges":[
+            "edges":[
                 %s
             ]
         }""" % (
             ",\n\t\t".join(
                 [
-                    self._SetNode(
-                        id=self.Nodes[node].name,
+                    ObsidianCanvas._saveNode(
+                        id=self.Nodes[node]["id"],
                         x=self.Nodes[node]["x"],
                         y=self.Nodes[node]["y"],
                         color=self.Nodes[node]["color"],
                         nome=self.Nodes[node]["nome"],
+                        folder=f"Subjects/",
                     )
                     for node in self.Nodes
                 ]
             ),
             ",\n\t\t".join(
                 [
-                    self._SetEdge(
-                        id=self.Edges[edge].name,
+                    self._saveEdge(
+                        id=edge.replace(" ", ""),
                         fromNode=self.Edges[edge]["fromNode"],
                         fromSide=self.Edges[edge]["fromSide"],
                         toNode=self.Edges[edge]["toNode"],
