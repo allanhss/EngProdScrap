@@ -7,17 +7,26 @@ from SIGAA import SIGAA
 
 
 class Obsidian:
-    def __init__(self, folder, *gradeDF):
+    def __init__(self, folder=f"Obsidian\\", gradeDF=None, historicoDF=None):
         self.folder = folder
         if not os.path.exists(self.folder):
             # Cria diretório caso não exista
             os.makedirs(self.folder)
-            if not gradeDF:
+            if gradeDF is None:
                 raise KeyError(AttributeError)
             self.perfilToMD(gradeDF)
-        elif not gradeDF:
+        elif gradeDF is None:
             self.getMD()
+        else:
+            self.perfilToMD(gradeDF)
         self.subjDF = self.getSubjectsDF()
+
+        #Inclui Histórico no DF
+        if historicoDF is not None:
+            self.subjDF = pd.concat(
+                [self.subjDF, historicoDF.aprovadas.T.fillna("APV")]
+            ).fillna("")
+        ...
 
     # Cria subject.md a partir da grade no Excel
     def perfilToMD(self, excelDF):
@@ -300,15 +309,10 @@ class ObsidianCanvas(Obsidian):
 
 if __name__ == "__main__":
     siga = SIGAA()
-    aprovadas = siga.historico.aprovadas
-    PerfilCurricular = siga.curriculo.df
-    print("Grade Processada")
 
     obsidian = Obsidian(
-        folder=paths.ObsidianFolder
-        if hasattr(paths, "ObsidianFolder")
-        else f"Obsidian\\",
-        gradeDF=PerfilCurricular,
+        gradeDF=siga.curriculo.df,
+        historicoDF=siga.historico,
     )
 
     ...
