@@ -198,15 +198,28 @@ class ObsidianCanvas(Obsidian):
         }
         self.CANVAS_Y[subj["Período"]] += 500
 
+    def _orderNode(self):
+        sumPreRequisitos = pd.Series(
+            [self.Edges[edge]["toNode"] for edge in self.Edges]
+        ).value_counts()
+
     def _setEdge(self, subj):
-        if len(subj["Pré-Requisitos"]) > 1:
+        preReqCount = len(subj["Pré-Requisitos"])
+        if preReqCount > 0:
             for preReq in subj["Pré-Requisitos"]:
+                if preReqCount > 2:
+                    color = 1
+                elif preReqCount > 1:
+                    color = 2
+                else:
+                    color = 4
+
                 self.Edges[f'{subj.name.split("-")[0]}- {preReq.split("-")[0]}'] = {
                     "fromNode": subj.name,
                     "fromSide": "left",
-                    "toNode": subj["Pré-Requisitos"],
+                    "toNode": preReq,
                     "toSide": "right",
-                    "color": 0 if subj["Média"] != None else 1,
+                    "color": 0 if subj["Média"] not in [None, "", []] else color,
                 }
 
     @staticmethod
@@ -281,7 +294,7 @@ class ObsidianCanvas(Obsidian):
         "nodes":[
                 %s
             ],
-            "edges":[
+        "edges":[
                 %s
             ]
         }""" % (
