@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup, NavigableString
 import pandas as pd
 import openpyxl
 import re
+import os
 
 
 class Historico:
@@ -28,6 +29,9 @@ class PerfilCurricular:
 class SIGAA:
     def __init__(self):
         self._SIGAAON = False
+        if not os.path.exists(f"data\\"):
+            # Cria diretório caso não exista
+            os.makedirs(f"data\\")
         self.historico = self.GetHistorico()
         self.curriculo = self.GetCurriculo()
 
@@ -223,7 +227,7 @@ class SIGAA:
             .partition("COLEGIADO")[0]
             .partition("COORDENAÇÃO")[0]
         )
-        subject["Tipo"] = subjectRawData[0][headerData.index("Tipo")]
+        subject["Tipo"] = subjectRawData[0][headerData.index("Tipo")].strip()
         subject["Período"] = int(subjectRawData[0][headerData.index("Período")])
         subject["CH Total"] = int(subjectRawData[0][headerData.index("CH Total")])
         for data in subjectRawData[1:]:
@@ -269,13 +273,13 @@ class SIGAA:
                     for point in parts:
                         if preReqON:
                             if point not in subject["Pré-Requisitos"]:
-                                subject["Pré-Requisitos"].append(point)
+                                subject["Pré-Requisitos"].append(point.strip())
                         elif CoreqON:
                             if point not in subject["Co-Requisitos"]:
-                                subject["Co-Requisitos"].append(point)
+                                subject["Co-Requisitos"].append(point.strip())
                         elif equivalON:
                             if point not in subject["Equivalências"]:
-                                subject["Equivalências"].append(point)
+                                subject["Equivalências"].append(point.strip())
         return subject
 
     def _SearchRawBlock(self, subjectRawBlock):
