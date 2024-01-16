@@ -179,7 +179,8 @@ class ObsidianCanvas(Obsidian):
         for subj in subjDF:
             self._setNode(subjDF[subj])
             self._setEdge(subjDF[subj])
-
+        self._orderNode()
+        self._formatEdgeColor()
         self.saveCanvas()
 
     def _setNode(self, subj):
@@ -198,73 +199,45 @@ class ObsidianCanvas(Obsidian):
         }
         self.CANVAS_Y[subj["Período"]] += 500
 
-    def _orderNode(self):
-        sumPreRequisitos = pd.Series(
-            [self.Edges[edge]["toNode"] for edge in self.Edges]
-        ).value_counts()
-
     def _setEdge(self, subj):
         preReqCount = len(subj["Pré-Requisitos"])
         if preReqCount > 0:
             for preReq in subj["Pré-Requisitos"]:
-                if preReqCount > 2:
-                    color = 1
-                elif preReqCount > 1:
-                    color = 2
-                else:
-                    color = 4
-
-                self.Edges[f'{subj.name.split("-")[0]}- {preReq.split("-")[0]}'] = {
-                    "fromNode": subj.name,
-                    "fromSide": "left",
-                    "toNode": preReq,
-                    "toSide": "right",
-                    "color": 0 if subj["Média"] not in [None, "", []] else color,
+                self.Edges[f'{preReq.split("-")[0]}-{subj.name.split("-")[0]}'] = {
+                    "fromNode": preReq,
+                    "fromSide": "right",
+                    "toNode": subj.name,
+                    "toSide": "left",
+                    "color": 0 if subj["Média"] not in [None, "", []] else 1,
                 }
 
-    @staticmethod
-    def _saveNode(
-        id: str, x: int, y: int, color=0, nome: str = "", folder=f"Obsidian\\Subjects\\"
-    ):
-        fitID = id.split(" ")
-        caracteresLinha = 0
-        height = 140
-        for palavra in fitID:
-            tamanho_palavra = len(palavra)
-            # Verifica se a palavra inteira cabe na linha atual
-            if (caracteresLinha + tamanho_palavra) < 23:
-                caracteresLinha += tamanho_palavra + 1  # +1 para o espaço
-            else:
-                # Se a palavra não couber, começa uma nova linha
-                height += 40
-                caracteresLinha = tamanho_palavra + 1  # +1 para o espaço
-
-        return f'{{"id":"{id}","type":"file","file":"{folder}{id}.md","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
-
-    @staticmethod
-    def _saveEdge(
-        id: str,
-        fromNode: str,
-        fromSide: Literal["top", "bottom", "left", "right"],
-        toNode: str,
-        toSide: Literal["top", "bottom", "left", "right"],
-        color=0,
-    ):
-        return f'{{"id":"{id}","fromNode":"{fromNode}","fromSide":"{fromSide}","toNode":"{toNode}","toSide":"{toSide}","toEnd":"none","color":"{color}"}}'
-
-    def OrganizeCANVAS(self):
-        # Set Color by Needed
-        sumPreRequisitos = pd.Series(
+    def _orderNode(self):
+        self.sumPreRequisitos = pd.Series(
             [self.Edges[edge]["toNode"] for edge in self.Edges]
         ).value_counts()
+        for subject in self.sumPreRequisitos.keys():
+            # Ordenar sumPreRequisitos em ordem decrescente
+            sortedSubjects = {
+                k: v
+                for k, v in sorted(
+                    self.sumPreRequisitos.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+            }
 
-        for subject in sumPreRequisitos.keys():
-            # Order Y by sumPreRequisitos
-            sortedSubjects = sumPreRequisitos.sort_values(ascending=False)
-            periodos = self.Nodes.loc["x"].unique()
+            # Obter um conjunto de períodos únicos presentes nos nós
+            periodos = set(node["x"] for node in self.Nodes.values())
 
             for periodo in periodos:
-                subjects_in_period = self.Nodes.columns[self.Nodes.loc["x"] == periodo]
+                # Obter todos os assuntos no período atual
+                subjects_in_period = [
+                    name
+                    for name, details in self.Nodes.items()
+                    if details["x"] == periodo
+                ]
+
+                # Criar uma série pandas com a soma dos pré-requisitos para cada assunto no período
                 subjects_series = pd.Series(
                     {
                         subject: sortedSubjects[subject]
@@ -273,13 +246,30 @@ class ObsidianCanvas(Obsidian):
                         for subject in subjects_in_period
                     }
                 )
+
+                # Ordenar os assuntos por sumPreRequisitos em ordem decrescente
                 subjects_in_period = subjects_series.sort_values(ascending=False).index
 
                 for i, subject in enumerate(subjects_in_period):
-                    x_coord = self.Nodes.loc["x", subject]
+                    x_coord = self.Nodes[subject]["x"]
                     y_coord = 500 * i
-                    self.Nodes.loc["y", subject] = y_coord
-            print("self.Nodes reordenados")
+                    self.Nodes[subject]["y"] = y_coord
+
+    def _formatEdgeColor(self):
+        for subject in self.sumPreRequisitos.keys():
+            preReqEdges = [
+                chave
+                for chave, edge in self.Edges.items()
+                if edge["fromNode"] == subject
+            ]
+            for edge in preReqEdges:
+                if self.Edges[edge]["color"] != 0:
+                    if self.sumPreRequisitos[subject] > 2:
+                        self.Edges[edge]["color"] = 1
+                    elif self.sumPreRequisitos[subject] > 1:
+                        self.Edges[edge]["color"] = 2
+                    else:
+                        self.Edges[edge]["color"] = 4
 
     def saveCanvas(self):
         subjectCanva = """{
@@ -319,6 +309,36 @@ class ObsidianCanvas(Obsidian):
         )
         with open(f"{self.folder}PR03.canvas", "w", encoding="utf-8") as f:
             f.write(subjectCanva)
+
+    @staticmethod
+    def _saveNode(
+        id: str, x: int, y: int, color=0, nome: str = "", folder=f"Obsidian\\Subjects\\"
+    ):
+        fitID = id.split(" ")
+        caracteresLinha = 0
+        height = 140
+        for palavra in fitID:
+            tamanho_palavra = len(palavra)
+            # Verifica se a palavra inteira cabe na linha atual
+            if (caracteresLinha + tamanho_palavra) < 23:
+                caracteresLinha += tamanho_palavra + 1  # +1 para o espaço
+            else:
+                # Se a palavra não couber, começa uma nova linha
+                height += 40
+                caracteresLinha = tamanho_palavra + 1  # +1 para o espaço
+
+        return f'{{"id":"{id}","type":"file","file":"{folder}{id}.md","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
+
+    @staticmethod
+    def _saveEdge(
+        id: str,
+        fromNode: str,
+        fromSide: Literal["top", "bottom", "left", "right"],
+        toNode: str,
+        toSide: Literal["top", "bottom", "left", "right"],
+        color=0,
+    ):
+        return f'{{"id":"{id}","fromNode":"{fromNode}","fromSide":"{fromSide}","toNode":"{toNode}","toSide":"{toSide}","color":"{color}"}}'
 
 
 if __name__ == "__main__":
