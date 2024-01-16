@@ -185,10 +185,10 @@ class ObsidianCanvas(Obsidian):
     def _setNode(self, subj):
         if subj["Tipo"] == "OPTATIVO":
             color = 6
-        elif subj["Média"] != None:
+        elif subj["Média"] not in [None, "", []]:
             color = 0
         else:
-            color = subj["Périodo"] % 2 + 4
+            color = subj["Período"] % 2 + 4
         self.Nodes[subj.name] = {
             "id": subj.name,
             "x": 600 * subj["Período"],
@@ -226,12 +226,19 @@ class ObsidianCanvas(Obsidian):
     def _saveNode(
         id: str, x: int, y: int, color=0, nome: str = "", folder=f"Obsidian\\Subjects\\"
     ):
-        if len(nome) < 25:
-            height = 220
-        elif len(nome) < 50:
-            height = 260
-        else:
-            height = 300
+        fitID = id.split(" ")
+        caracteresLinha = 0
+        height = 140
+        for palavra in fitID:
+            tamanho_palavra = len(palavra)
+            # Verifica se a palavra inteira cabe na linha atual
+            if (caracteresLinha + tamanho_palavra) < 23:
+                caracteresLinha += tamanho_palavra + 1  # +1 para o espaço
+            else:
+                # Se a palavra não couber, começa uma nova linha
+                height += 40
+                caracteresLinha = tamanho_palavra + 1  # +1 para o espaço
+
         return f'{{"id":"{id}","type":"file","file":"{folder}{id}.md","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
 
     @staticmethod
@@ -252,21 +259,6 @@ class ObsidianCanvas(Obsidian):
         ).value_counts()
 
         for subject in sumPreRequisitos.keys():
-            selectedSubjects = [
-                self.Edges[edge].name
-                for edge in self.Edges
-                if self.Edges[edge]["toNode"] == subject
-            ]
-            for edge in selectedSubjects:
-                if self.Edges[edge]["color"] != 0:
-                    if sumPreRequisitos[subject] > 2:
-                        self.Edges[edge]["color"] = 1
-                    elif sumPreRequisitos[subject] > 1:
-                        self.Edges[edge]["color"] = 2
-                    else:
-                        self.Edges[edge]["color"] = 4
-            print("self.Edges ajustadas")
-
             # Order Y by sumPreRequisitos
             sortedSubjects = sumPreRequisitos.sort_values(ascending=False)
             periodos = self.Nodes.loc["x"].unique()
