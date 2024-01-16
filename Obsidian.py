@@ -187,12 +187,16 @@ class ObsidianCanvas(Obsidian):
         self.saveCanvas()
 
     def _setNode(self, subj):
-        if subj["Tipo"] == "OPTATIVO":
-            color = 6
-        elif subj.name in self.aprovadasList:
+        if subj.name in self.aprovadasList:
             color = 0
+        elif subj["Tipo"] == "OPTATIVA":
+            color = 6
+        elif subj["Tipo"] == "GERAL":
+            color = 5
+        elif subj["Tipo"] == "PROFISSIONAL":
+            color = 2
         else:
-            color = subj["Período"] % 2 + 4
+            color = 5
         self.Nodes[subj.name] = {
             "id": subj.name,
             "x": 600 * subj["Período"],
