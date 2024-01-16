@@ -10,8 +10,12 @@ class Obsidian:
     def __init__(self, folder=f"Obsidian\\", gradeDF=None, historicoDF=None):
         self.folder = folder
         if not os.path.exists(self.folder):
-            # Cria diretório caso não exista
             os.makedirs(self.folder)
+            os.makedirs(f"{self.folder}Subjects")
+            if gradeDF is None:
+                raise KeyError(AttributeError)
+            self.perfilToMD(gradeDF)
+        if not os.path.exists(f"{self.folder}Subjects"):
             os.makedirs(f"{self.folder}Subjects")
             if gradeDF is None:
                 raise KeyError(AttributeError)
@@ -20,6 +24,7 @@ class Obsidian:
             self.getMD()
         else:
             self.perfilToMD(gradeDF)
+
         self.subjDF = self.getSubjectsDF()
         # Inclui Histórico no DF
         if historicoDF is not None:
