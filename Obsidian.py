@@ -189,7 +189,7 @@ class ObsidianCanvas(Obsidian):
     def _setNode(self, subj):
         if subj["Tipo"] == "OPTATIVO":
             color = 6
-        elif subj["Média"] not in [None, "", []]:
+        elif subj.name in self.aprovadasList:
             color = 0
         else:
             color = subj["Período"] % 2 + 4
