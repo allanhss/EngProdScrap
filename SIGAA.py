@@ -115,20 +115,25 @@ class SIGAA:
                 id="CICLO GERAL OU CICLO BÁSICO 0"
             ).find_all("tr")
             perfil = self._SearchRawBlock(cicloBasicoRaw)
+            perfil.loc["Tipo"] = "GERAL"
             print("CICLO GERAL OK")
 
             # CICLO PROFISSIONAL
             cicloProfissionalRaw = consultaDiv.find(
                 id="CICLO PROFISSIONAL OU TRONCO COMUM 29"
             ).find_all("tr")
-            perfil = perfil.join(self._SearchRawBlock(cicloProfissionalRaw))
+            prof = self._SearchRawBlock(cicloProfissionalRaw)
+            prof.loc["Tipo"] = "PROFISSIONAL"
+            perfil = perfil.join(prof)
             print("CICLO PROFISSIONAL OK")
 
             # CICLO OPTATIVO
             cicloOptativoRaw = consultaDiv.find(
                 id="COMPONENTES OPTATIVOS  - DISCIPLINAS OPTATIVAS63"
             ).find_all("tr")
-            perfil = perfil.join(self._SearchRawBlock(cicloOptativoRaw))
+            optat = self._SearchRawBlock(cicloOptativoRaw)
+            optat.loc["Tipo"] = "OPTATIVA"
+            perfil = perfil.join(optat)
             print("OPTATIVAS OK")
 
             PerfilFull = perfil.sort_values(
