@@ -9,5 +9,6 @@ if __name__ == "__main__":
         gradeDF=siga.curriculo.df,
         historicoDF=siga.historico,
     )
+    obsidian.createPeriodoCanvas(nome="2023.2")
 
     ...

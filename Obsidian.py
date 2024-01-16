@@ -21,12 +21,10 @@ class Obsidian:
         else:
             self.perfilToMD(gradeDF)
         self.subjDF = self.getSubjectsDF()
-
         # Inclui Histórico no DF
         if historicoDF is not None:
-            self.subjDF = pd.concat(
-                [self.subjDF, historicoDF.aprovadas.T.fillna("APV")]
-            )
+            self.aprovadasDF = historicoDF.aprovadas.T.fillna("APV")
+            self.subjDF = pd.concat([self.subjDF, self.aprovadasDF])
 
         self.dfToCanvas()
 
@@ -50,7 +48,39 @@ class Obsidian:
         return self.subjects
 
     def dfToCanvas(self):
-        self.canvas = ObsidianCanvas(self.subjDF, folder=self.folder)
+        self.canvas = ObsidianCanvas(
+            subjDF=self.subjDF, aprovadasDF=self.aprovadasDF, folder=self.folder
+        )
+
+    def createPeriodoCanvas(self, nome):
+        done = list(self.aprovadasDF.dropna().columns)
+        missing = self.subjDF.drop(done, axis=1)
+        preReqMask = missing.loc["Pré-Requisitos"].apply(
+            lambda x: not x or any(item in done for item in x)
+        )
+
+        missing = missing.T[preReqMask]
+
+        periodoImpar = int(nome.split(".")[-1]) % 2
+        subjectsAvaiable = missing[missing["Período"] % 2 == periodoImpar]
+        subjectsAvaiable.loc[
+            subjectsAvaiable["Tipo"] != "OPTATIVA", "Tipo"
+        ] = "Disponível"
+
+        subjectsGeral = missing[missing["Tipo"] == "GERAL"]
+        subjectsPossible = subjectsGeral[
+            ~subjectsGeral.index.isin(subjectsAvaiable.index)
+        ]
+        subjectsPossible.loc[:, "Tipo"] = "Possivel"
+        dfTotal = subjectsAvaiable.T.join(subjectsPossible.T)
+
+        setattr(
+            self,
+            nome,
+            ObsidianCanvas(
+                subjDF=dfTotal, folder=self.folder, how="Período", nome=nome
+            ),
+        )
 
     def getSubjectsDF(self):
         subjDF = pd.DataFrame(
@@ -170,30 +200,42 @@ class ObsidianMD(Obsidian):
 
 
 class ObsidianCanvas(Obsidian):
-    def __init__(self, subjDF, folder=f"Obsidian"):
+    def __init__(
+        self,
+        subjDF,
+        aprovadasDF=pd.DataFrame(),
+        folder=f"Obsidian",
+        how="Perfil",
+        nome="PE03",
+    ):
         self.folder = folder
+        self.aprovadasList = list(aprovadasDF.dropna().columns)
         self.CANVAS_Y = [0] * 11
         self.Nodes = {}
         self.Edges = {}
-        self.sumPreRequisitos = pd.Series(
-            [self.Edges[edge]["toNode"] for edge in self.Edges]
-        ).value_counts()
-        self.aprovadasList = list(subjDF.loc["Média"].dropna().index)
-        for subj in subjDF:
-            self._setNode(subjDF[subj])
-            self._setEdge(subjDF[subj])
-        self._orderNode()
-        self._formatEdgeColor()
-        self.saveCanvas()
+        if how == "Perfil":
+            self.sumPreRequisitos = pd.Series(
+                [self.Edges[edge]["toNode"] for edge in self.Edges]
+            ).value_counts()
+            for subj in subjDF:
+                self._setNode(subjDF[subj])
+                self._setEdge(subjDF[subj])
+            self._orderNode()
+            self._formatEdgeColor()
+            self.saveCanvas(nome="PE03")
+        elif how == "Período":
+            for subj in subjDF:
+                self._setNode(subjDF[subj])
+            self.saveCanvas(nome=nome)
 
     def _setNode(self, subj):
         if subj.name in self.aprovadasList:
             color = 0
-        elif subj["Tipo"] == "OPTATIVA":
+        elif subj["Tipo"] in ["OPTATIVA"]:
             color = 6
-        elif subj["Tipo"] == "GERAL":
+        elif subj["Tipo"] in ["GERAL", "Possivel"]:
             color = 5
-        elif subj["Tipo"] == "PROFISSIONAL":
+        elif subj["Tipo"] in ["PROFISSIONAL", "Disponível"]:
             color = 2
         else:
             color = 5
@@ -275,7 +317,7 @@ class ObsidianCanvas(Obsidian):
                     else:
                         self.Edges[edge]["color"] = 4
 
-    def saveCanvas(self):
+    def saveCanvas(self, nome):
         subjectCanva = """{
         "nodes":[
                 %s
@@ -311,7 +353,7 @@ class ObsidianCanvas(Obsidian):
                 ]
             ),
         )
-        with open(f"{self.folder}PR03.canvas", "w", encoding="utf-8") as f:
+        with open(f"{self.folder}{nome}.canvas", "w", encoding="utf-8") as f:
             f.write(subjectCanva)
 
     @staticmethod
@@ -352,5 +394,5 @@ if __name__ == "__main__":
         gradeDF=siga.curriculo.df,
         historicoDF=siga.historico,
     )
-
+    obsidian.createPeriodoCanvas(nome="2023.2")
     ...
