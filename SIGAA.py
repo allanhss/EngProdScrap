@@ -18,7 +18,7 @@ class Historico:
 
 class PerfilCurricular:
     def __init__(self, perfilCurricular):
-        self.df = perfilCurricular.applymap(
+        self.df = perfilCurricular.map(
             lambda x: [i for i in x.strip("[]").replace("", "").split(", ") if i != ""]
             if isinstance(x, str)
             else x
@@ -92,7 +92,7 @@ class SIGAA:
 
     def GetCurriculo(self, grade="PRO03"):
         try:
-            return PerfilCurricular(pd.read_excel(f"data\{grade}.xlsx", index_col=0))
+            return PerfilCurricular(pd.read_excel(f"data\\{grade}.xlsx", index_col=0))
 
         except FileNotFoundError:
             print("Curriculo Not Found")
@@ -139,11 +139,11 @@ class SIGAA:
             PerfilFull = perfil.sort_values(
                 ["Período", "Tipo"], axis="columns", ascending=True
             ).T
-            PerfilFull.to_excel(f"data\{grade}.xlsx")
+            PerfilFull.to_excel(f"data\\{grade}.xlsx")
             print(f"Curriculo {grade} OK")
             return PerfilCurricular(PerfilFull)
 
-    def GetHistorico(self, file="data\Historico.xlsx"):
+    def GetHistorico(self, file="data\\Historico.xlsx"):
         try:
             return Historico(pd.read_excel(file, index_col=0))
 
