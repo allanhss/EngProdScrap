@@ -26,7 +26,7 @@ class Obsidian:
         if historicoDF is not None:
             self.subjDF = pd.concat(
                 [self.subjDF, historicoDF.aprovadas.T.fillna("APV")]
-            ).fillna("")
+            )
 
         self.dfToCanvas()
 
@@ -175,7 +175,10 @@ class ObsidianCanvas(Obsidian):
         self.CANVAS_Y = [0] * 11
         self.Nodes = {}
         self.Edges = {}
-
+        self.sumPreRequisitos = pd.Series(
+            [self.Edges[edge]["toNode"] for edge in self.Edges]
+        ).value_counts()
+        self.aprovadasList = list(subjDF.loc["Média"].dropna().index)
         for subj in subjDF:
             self._setNode(subjDF[subj])
             self._setEdge(subjDF[subj])
@@ -208,13 +211,10 @@ class ObsidianCanvas(Obsidian):
                     "fromSide": "right",
                     "toNode": subj.name,
                     "toSide": "left",
-                    "color": 0 if subj["Média"] not in [None, "", []] else 1,
+                    "color": 0 if preReq in self.aprovadasList else 1,
                 }
 
     def _orderNode(self):
-        self.sumPreRequisitos = pd.Series(
-            [self.Edges[edge]["toNode"] for edge in self.Edges]
-        ).value_counts()
         for subject in self.sumPreRequisitos.keys():
             # Ordenar sumPreRequisitos em ordem decrescente
             sortedSubjects = {
