@@ -65,12 +65,13 @@ class Obsidian:
         )
 
         missing = missing.T[preReqMask]
+        missing.T.to_excel(f"Missing.xlsx")
 
         periodoImpar = int(nome.split(".")[-1]) % 2
         subjectsAvaiable = missing[missing["Período"] % 2 == periodoImpar]
-        subjectsAvaiable.loc[
-            subjectsAvaiable["Tipo"] != "OPTATIVA", "Tipo"
-        ] = "Disponível"
+        subjectsAvaiable.loc[subjectsAvaiable["Tipo"] != "OPTATIVA", "Tipo"] = (
+            "Disponível"
+        )
 
         subjectsGeral = missing[missing["Tipo"] == "GERAL"]
         subjectsPossible = subjectsGeral[
@@ -291,9 +292,9 @@ class ObsidianCanvas(Obsidian):
                 # Criar uma série pandas com a soma dos pré-requisitos para cada assunto no período
                 subjects_series = pd.Series(
                     {
-                        subject: sortedSubjects[subject]
-                        if subject in sortedSubjects
-                        else 0
+                        subject: (
+                            sortedSubjects[subject] if subject in sortedSubjects else 0
+                        )
                         for subject in subjects_in_period
                     }
                 )

@@ -20,9 +20,11 @@ class Historico:
 class PerfilCurricular:
     def __init__(self, perfilCurricular):
         self.df = perfilCurricular.map(
-            lambda x: [i for i in x.strip("[]").replace("", "").split(", ") if i != ""]
-            if isinstance(x, str)
-            else x
+            lambda x: (
+                [i for i in x.strip("[]").replace("", "").split(", ") if i != ""]
+                if isinstance(x, str)
+                else x
+            )
         )
 
 
@@ -218,6 +220,7 @@ class SIGAA:
             .replace("*", "")
             .replace(":", "")
             .replace(".", "")
+            .replace("  ", " ")
         )
 
     def _SearchRawSubject(self, subjectRawData, headerData):
