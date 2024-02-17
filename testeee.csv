@@ -1,0 +1,3 @@
+Subject,Start Date,Start Time,End Date,End Time,All Day Event,Description,Location
+ExampleSubject,2/18/2024,19:10:00,2/18/2024,22:00:00,FALSO,ExampleDescription,ExampleLocation
+ExampleSubject2,2/18/2024,19:30:00,2/18/2024,22:30:00,FALSO,ExampleDescription2,ExampleLocation2

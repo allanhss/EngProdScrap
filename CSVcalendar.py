@@ -5,16 +5,23 @@ from pypdf import PdfReader
 
 class calendar:
     def __init__(self, folder=f"data\\PlanoEnsino\\"):
-        self.folder = folder
-        if not os.path.exists(self.folder):
-            os.makedirs(self.folder)
+        self.subjects = []
+        if not os.path.exists(folder):
+            os.makedirs(folder)
         else:
-            for root, dirs, files in os.walk(self.folder):
+            for root, dirs, files in os.walk(folder):
                 for file in files:
                     if os.path.splitext(file)[1] == ".pdf":
-                        subjectPlan(subjPlanPdfPath=os.path.join(root, file))
+                        self.subjects.append(
+                            subjectPlan(subjPlanPdfPath=os.path.join(root, file))
+                        )
 
-    def to_csv(): ...
+    def to_csv(self):
+        csvCalendar = pd.DataFrame()
+        for subj in self.subjects:
+            csvCalendar.merge(csvCalendar, subj.df)
+
+        csvCalendar.to_csv("teste.csv", index=False, encoding="utf-8-sig")
 
 
 class subjectPlan:
@@ -76,6 +83,6 @@ if __name__ == "__main__":
         startTime="10:00:00",
         endTime="12:00:00",
     )
-    calendarTest.df.to_csv("teste.csv", index=False, encoding="utf-8-sig")
+
     # newCal.to_csv()
     print("Main Done")
