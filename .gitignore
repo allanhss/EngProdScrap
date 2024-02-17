@@ -162,4 +162,8 @@ cython_debug/
 .vscode/
 paths.py
 data/
-Obsidian/
+
+Obsidian/*
+!Obsidian/.obsidian
+Obsidian/.obsidian/*
+!Obsidian/.obsidian/appearance.json
