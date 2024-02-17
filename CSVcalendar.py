@@ -19,17 +19,99 @@ class calendar:
     def to_csv(self):
         csvCalendar = pd.DataFrame()
         for subj in self.subjects:
-            csvCalendar.merge(csvCalendar, subj.df)
+            for classes in subj.classes:
+                csvCalendar = pd.concat([csvCalendar, classes.df], ignore_index=True)
 
         csvCalendar.to_csv("teste.csv", index=False, encoding="utf-8-sig")
 
 
 class subjectPlan:
     def __init__(self, subjPlanPdfPath):
+        self.classes = []
+
         if os.path.isfile(subjPlanPdfPath):
             subjPlanPDF = PdfReader(subjPlanPdfPath)
             for page in subjPlanPDF.pages:
                 text = page.extract_text(extraction_mode="layout")
+                txtLines = [line for line in text.split("\n") if line != ""]
+                for i, line in enumerate(txtLines):
+                    if "PERÍODO" in line:
+                        periodo = [i.strip() for i in line.split("   ") if i != ""][-1]
+
+                    # Disciplina
+                    elif "CH Teórica" in line:
+                        name = [
+                            clr.strip()
+                            for clr in txtLines[i + 1].split("   ")
+                            if clr != ""
+                        ][0]
+                    # Turma
+                    elif "Turma" in line and "Identificação" in txtLines[i + 1]:
+                        turma = [
+                            clr.strip()
+                            for clr in txtLines[i + 2].split("   ")
+                            if clr != ""
+                        ][0]
+
+                    # Ementa
+                    # Objetivo
+                    # Metodologia
+                    # Forma de Avaliação
+                    # Bibliografia
+
+                    # Unidade Programática
+                    elif (
+                        "Unidade Programática" in line and "Conteúdo" in txtLines[i + 1]
+                    ):
+                        skipNext = False
+                        for j, lineUnit in enumerate(txtLines[i + 3 :]):
+                            if skipNext:
+                                skipNext = False
+                                continue
+                            fieldPos = [
+                                (0, 13),
+                                (14, 65),
+                                (66, 77),
+                                (78, 87),
+                                (87, 97),
+                                (98, 109),
+                                (110, 120),
+                                (120, None),
+                            ]
+                            if "Status do Relatório" in lineUnit:
+                                break
+                            elif "Data de Envio" in lineUnit:
+                                break
+                            elif "Data de Aprovação" in lineUnit:
+                                break
+                            elif "/" in lineUnit and ":" in lineUnit:
+                                data = []
+                                for k, piece in enumerate(
+                                    [
+                                        i.strip()
+                                        for i in lineUnit.split("    ")
+                                        if i != ""
+                                    ]
+                                ):
+                                    firstPiece = piece.strip()
+                                    nextPiece = txtLines[i + j + 4][
+                                        fieldPos[k][0] : fieldPos[k][1]
+                                    ].strip()
+                                    end = firstPiece + " " + nextPiece
+                                    skipNext = True
+                                    data.append(end.strip())
+                            self.classes.append(
+                                calendarItem(
+                                    name=name,
+                                    description=f"""Turma {turma}
+Professor:{data[-1]}
+Conteúdo:{data[1]}""",
+                                    startDate=data[0].split(" ")[0],
+                                    startTime=data[2],
+                                    endTime=data[3],
+                                )
+                            )
+                        break
 
 
 class calendarItem:
@@ -83,6 +165,6 @@ if __name__ == "__main__":
         startTime="10:00:00",
         endTime="12:00:00",
     )
+    newCal.to_csv()
 
-    # newCal.to_csv()
     print("Main Done")
