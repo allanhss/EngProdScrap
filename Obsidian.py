@@ -28,7 +28,15 @@ class Obsidian:
         self.subjDF = self.getSubjectsDF()
         # Inclui Histórico no DF
         if historicoDF is not None:
-            self.aprovadasDF = historicoDF.aprovadas.T.fillna("APV")
+            self.aprovadasDF = historicoDF.loc[
+                historicoDF["Situação"].isin(
+                    ["APROVADO POR MÉDIA", "DISPENSADO", "APROVADO"]
+                ),
+                ["Média"],
+            ].T.fillna("APV")
+            self.cursandoDF = historicoDF.loc[
+                historicoDF["Situação"].isin(["CURSANDO"])
+            ].T.fillna("CUR")
             self.subjDF = pd.concat([self.subjDF, self.aprovadasDF])
 
         self.dfToCanvas()
@@ -54,7 +62,10 @@ class Obsidian:
 
     def dfToCanvas(self):
         self.canvas = ObsidianCanvas(
-            subjDF=self.subjDF, aprovadasDF=self.aprovadasDF, folder=self.folder
+            subjDF=self.subjDF,
+            aprovadasDF=self.aprovadasDF,
+            cursandoDF=self.cursandoDF,
+            folder=self.folder,
         )
 
     def createPeriodoCanvas(self, nome):
@@ -210,12 +221,14 @@ class ObsidianCanvas(Obsidian):
         self,
         subjDF,
         aprovadasDF=pd.DataFrame(),
+        cursandoDF=pd.DataFrame(),
         folder=f"Obsidian",
         how="Perfil",
         nome="PE03",
     ):
         self.folder = folder
         self.aprovadasList = list(aprovadasDF.dropna().columns)
+        self.cursandoList = list(cursandoDF.dropna().columns)
         self.CANVAS_Y = [0] * 11
         self.Nodes = {}
         self.Edges = {}
@@ -237,6 +250,8 @@ class ObsidianCanvas(Obsidian):
     def _setNode(self, subj):
         if subj.name in self.aprovadasList:
             color = 0
+        elif subj.name in self.cursandoList:
+            color = 3
         elif subj["Tipo"] in ["OPTATIVA"]:
             color = 6
         elif subj["Tipo"] in ["GERAL", "Possivel"]:
@@ -263,7 +278,11 @@ class ObsidianCanvas(Obsidian):
                     "fromSide": "right",
                     "toNode": subj.name,
                     "toSide": "left",
-                    "color": 0 if preReq in self.aprovadasList else 1,
+                    "color": (
+                        0
+                        if preReq in self.aprovadasList
+                        else 2 if preReq in self.cursandoList else 1
+                    ),
                 }
 
     def _orderNode(self):
@@ -340,7 +359,7 @@ class ObsidianCanvas(Obsidian):
                         y=self.Nodes[node]["y"],
                         color=self.Nodes[node]["color"],
                         nome=self.Nodes[node]["nome"],
-                        folder=f"Subjects/",
+                        folder=f"UNIVASF/PE03/Subjects/",
                     )
                     for node in self.Nodes
                 ]
@@ -398,7 +417,9 @@ if __name__ == "__main__":
 
     obsidian = Obsidian(
         gradeDF=siga.curriculo.df,
-        historicoDF=siga.historico,
+        historicoDF=siga.historico.df,
+        folder=paths.ObsidianFolder,
     )
-    obsidian.createPeriodoCanvas(nome="2023.2")
+    # obsidian.createPeriodoCanvas(nome="2023.2")
+    print("Done")
     ...

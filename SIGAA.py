@@ -13,8 +13,12 @@ class Historico:
     def __init__(self, historico):
         self.df = historico
         self.aprovadas = historico.loc[
-            historico["Situação"].isin(["APROVADO POR MÉDIA", "DISPENSADO"]), ["Média"]
+            historico["Situação"].isin(
+                ["APROVADO POR MÉDIA", "DISPENSADO", "APROVADO"]
+            ),
+            ["Média"],
         ]
+        self.cursando = historico.loc[historico["Situação"].isin(["CURSANDO"])]
 
 
 class PerfilCurricular:
@@ -36,6 +40,14 @@ class SIGAA:
             os.makedirs(f"data\\")
         self.historico = self.GetHistorico()
         self.curriculo = self.GetCurriculo()
+        equiv = [i for i in self.historico.df.index if i not in self.curriculo.df.index]
+        for subj in equiv:
+            name = self.curriculo.df[
+                self.curriculo.df["Equivalências"].apply(
+                    lambda listas: any(subj in lista for lista in listas)
+                )
+            ].index.tolist()
+            self.historico.df.rename(index={subj: name[0]}, inplace=True)
 
     def _SIGAA_Init(self):
         self.driver = webdriver.Chrome(options=Options().add_argument("--incognito"))
@@ -210,6 +222,14 @@ class SIGAA:
             print("Histórico OK")
             return Historico(histFull)
 
+    def UpdateHistorico(self, file="data\\Historico.xlsx"):
+        print("UpdateHistorico")
+        try:
+            os.remove(file)
+        except FileNotFoundError:
+            print("Historico not Found")
+        self.GetHistorico()
+
     def _StringCleaner(self, string):
         return (
             string.replace("\n", "")
@@ -334,3 +354,6 @@ if __name__ == "__main__":
     siga = SIGAA()
     print(siga.historico.aprovadas)
     print(siga.curriculo.df)
+    print("\n Cursando")
+    print(siga.historico.cursando)
+    siga.UpdateHistorico()
