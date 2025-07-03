@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Literal
 import os
 import re
-import paths
+import paths as paths
 from SIGAA import SIGAA
 
 
