@@ -6,6 +6,8 @@ from bs4 import BeautifulSoup, NavigableString
 import pandas as pd
 import openpyxl
 import re
+from pathlib import Path
+from datetime import datetime, timedelta
 
 
 class Historico:
@@ -18,11 +20,15 @@ class Historico:
 
 class PerfilCurricular:
     def __init__(self, perfilCurricular):
-        self.df = perfilCurricular.applymap(
-            lambda x: [i for i in x.strip("[]").replace("", "").split(", ") if i != ""]
-            if isinstance(x, str)
-            else x
-        )
+        def limpar_celula(x):
+            if isinstance(x, str):
+                return [i for i in x.strip("[]").replace("", "").split(", ") if i != ""]
+            return x
+
+        # Aplica a função a cada coluna individualmente com .map()
+        self.df = perfilCurricular.copy()
+        for col in self.df.columns:
+            self.df[col] = self.df[col].map(limpar_celula)
 
 
 class SIGAA:
@@ -92,112 +98,116 @@ class SIGAA:
 
     def GetCurriculo(self, grade="PRO03"):
         try:
-            return PerfilCurricular(pd.read_excel(f"data\{grade}.xlsx", index_col=0))
+            if datetime.fromtimestamp(Path(f"data\{grade}.xlsx").stat().st_mtime) > (
+                datetime.now() - timedelta(days=7)
+            ):
+                return PerfilCurricular(
+                    pd.read_excel(f"data\{grade}.xlsx", index_col=0)
+                )
 
         except FileNotFoundError:
             print("Curriculo Not Found")
-            if not self._SIGAAON:
-                self._SIGAA_Init()
+        if not self._SIGAAON:
+            self._SIGAA_Init()
 
-            self._SIGAA_FindCurriculo(grade, how="Bloco")
-            self.driver.switch_to.default_content()
-            self.driver.switch_to.frame("Conteudo")
+        self._SIGAA_FindCurriculo(grade, how="Bloco")
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame("Conteudo")
 
-            # Perfil Curricular
-            consulta = self.driver.find_element(
-                by=By.XPATH, value='//*[@id="form-corpo"]'
-            )
-            soup = BeautifulSoup(consulta.get_attribute("outerHTML"), "html.parser")
-            consultaDiv = soup.find(id="form-corpo")
+        # Perfil Curricular
+        consulta = self.driver.find_element(by=By.XPATH, value='//*[@id="form-corpo"]')
+        soup = BeautifulSoup(consulta.get_attribute("outerHTML"), "html.parser")
+        consultaDiv = soup.find(id="form-corpo")
 
-            ## CICLO GERAL
-            cicloBasicoRaw = consultaDiv.find(
-                id="CICLO GERAL OU CICLO BÁSICO 0"
-            ).find_all("tr")
-            perfil = self._SearchRawBlock(cicloBasicoRaw)
-            print("CICLO GERAL OK")
+        ## CICLO GERAL
+        cicloBasicoRaw = consultaDiv.find(id="CICLO GERAL OU CICLO BÁSICO 0").find_all(
+            "tr"
+        )
+        perfil = self._SearchRawBlock(cicloBasicoRaw)
+        print("CICLO GERAL OK")
 
-            # CICLO PROFISSIONAL
-            cicloProfissionalRaw = consultaDiv.find(
-                id="CICLO PROFISSIONAL OU TRONCO COMUM 29"
-            ).find_all("tr")
-            perfil = perfil.join(self._SearchRawBlock(cicloProfissionalRaw))
-            print("CICLO PROFISSIONAL OK")
+        # CICLO PROFISSIONAL
+        cicloProfissionalRaw = consultaDiv.find(
+            id="CICLO PROFISSIONAL OU TRONCO COMUM 29"
+        ).find_all("tr")
+        perfil = perfil.join(self._SearchRawBlock(cicloProfissionalRaw))
+        print("CICLO PROFISSIONAL OK")
 
-            # CICLO OPTATIVO
-            cicloOptativoRaw = consultaDiv.find(
-                id="COMPONENTES OPTATIVOS  - DISCIPLINAS OPTATIVAS63"
-            ).find_all("tr")
-            perfil = perfil.join(self._SearchRawBlock(cicloOptativoRaw))
-            print("OPTATIVAS OK")
+        # CICLO OPTATIVO
+        cicloOptativoRaw = consultaDiv.find(
+            id="COMPONENTES OPTATIVOS  - DISCIPLINAS OPTATIVAS63"
+        ).find_all("tr")
+        perfil = perfil.join(self._SearchRawBlock(cicloOptativoRaw))
+        print("OPTATIVAS OK")
 
-            PerfilFull = perfil.sort_values(
-                ["Período", "Tipo"], axis="columns", ascending=True
-            ).T
-            PerfilFull.to_excel(f"data\{grade}.xlsx")
-            print(f"Curriculo {grade} OK")
-            return PerfilCurricular(PerfilFull)
+        PerfilFull = perfil.sort_values(
+            ["Período", "Tipo"], axis="columns", ascending=True
+        ).T
+        PerfilFull.to_excel(f"data\{grade}.xlsx")
+        print(f"Curriculo {grade} OK")
+        return PerfilCurricular(PerfilFull)
 
     def GetHistorico(self, file="data\Historico.xlsx"):
         try:
-            return Historico(pd.read_excel(file, index_col=0))
+            if datetime.fromtimestamp(Path(file).stat().st_mtime) > (
+                datetime.now() - timedelta(days=7)
+            ):
+                return Historico(pd.read_excel(file, index_col=0))
 
         except FileNotFoundError:
             print("Historico not Found")
-            # Menu -> Detalhamento do Discente
-            if not self._SIGAAON:
-                self._SIGAA_Init()
-            self.driver.implicitly_wait(5)
-            self.driver.switch_to.default_content()
-            self.driver.find_element(
-                by=By.ID, value="menuTopo:repeatAcessoMenu:1:linkDescricaoMenu"
-            ).click()
-            self.driver.find_element(
-                by=By.ID,
-                value="menuTopo:repeatAcessoMenu:1:repeatSuperTransacoesSuperMenu:0:linkSuperTransacaoSuperMenu",
-            ).click()
-            self.driver.implicitly_wait(5)
+        # Menu -> Detalhamento do Discente
+        if not self._SIGAAON:
+            self._SIGAA_Init()
+        self.driver.implicitly_wait(5)
+        self.driver.switch_to.default_content()
+        self.driver.find_element(
+            by=By.ID, value="menuTopo:repeatAcessoMenu:1:linkDescricaoMenu"
+        ).click()
+        self.driver.find_element(
+            by=By.ID,
+            value="menuTopo:repeatAcessoMenu:1:repeatSuperTransacoesSuperMenu:0:linkSuperTransacaoSuperMenu",
+        ).click()
+        self.driver.implicitly_wait(5)
 
-            # Menu Sec -> Histórico
-            self.driver.switch_to.default_content()
-            self.driver.switch_to.frame("Conteudo")
-            self.driver.implicitly_wait(5)
-            self.driver.find_element(
-                By.ID, value="form:repeatTransacoes:1:outputPanelTransacoes"
-            ).click()
+        # Menu Sec -> Histórico
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame("Conteudo")
+        self.driver.implicitly_wait(5)
+        self.driver.find_element(
+            By.ID, value="form:repeatTransacoes:1:outputPanelTransacoes"
+        ).click()
 
-            # Histórico
-            self.driver.switch_to.default_content()
-            self.driver.implicitly_wait(5)
-            self.driver.switch_to.frame("Conteudo")
+        # Histórico
+        self.driver.switch_to.default_content()
+        self.driver.implicitly_wait(5)
+        self.driver.switch_to.frame("Conteudo")
 
-            consulta = self.driver.find_element(
-                by=By.XPATH, value='//*[@id="form-corpo"]'
-            )
-            soup = BeautifulSoup(consulta.get_attribute("outerHTML"), "html.parser")
-            consultaDiv = soup.find(id="form-corpo")
-            self.driver.implicitly_wait(5)
+        consulta = self.driver.find_element(by=By.XPATH, value='//*[@id="form-corpo"]')
+        soup = BeautifulSoup(consulta.get_attribute("outerHTML"), "html.parser")
+        consultaDiv = soup.find(id="form-corpo")
+        self.driver.implicitly_wait(5)
 
-            histSubjects = [
-                [td.get_text(strip=True) for td in i.find_previous("tr").find_all("td")]
-                for dataTable in consultaDiv.find_all("table")
-                for i in dataTable.find_all("tr")
-                if " - " in (i.get("id") or "")
-            ]
-            histFull = pd.DataFrame(
-                histSubjects,
-                columns=[
-                    "Componente Curricular",
-                    "Faltas",
-                    "CH",
-                    "Créditos",
-                    "Média",
-                    "Situação",
-                ],
-            )
-            histFull.to_excel(file, index=False)
-            print("Histórico OK")
-            return Historico(histFull)
+        histSubjects = [
+            [td.get_text(strip=True) for td in i.find_previous("tr").find_all("td")]
+            for dataTable in consultaDiv.find_all("table")
+            for i in dataTable.find_all("tr")
+            if " - " in (i.get("id") or "")
+        ]
+        histFull = pd.DataFrame(
+            histSubjects,
+            columns=[
+                "Componente Curricular",
+                "Faltas",
+                "CH",
+                "Créditos",
+                "Média",
+                "Situação",
+            ],
+        )
+        histFull.to_excel(file, index=False)
+        print("Histórico OK")
+        return Historico(histFull)
 
     def _StringCleaner(self, string):
         return (
@@ -320,5 +330,4 @@ class SIGAA:
 
 if __name__ == "__main__":
     siga = SIGAA()
-    print(siga.historico.aprovadas)
-    print(siga.curriculo.df)
+    print("SIGA Done")
