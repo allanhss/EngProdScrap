@@ -8,13 +8,18 @@ import openpyxl
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
+import os
+import json
 
 
 class Historico:
     def __init__(self, historico):
         self.df = historico
         self.aprovadas = historico.loc[
-            historico["Situação"].isin(["APROVADO POR MÉDIA", "DISPENSADO"]), ["Média"]
+            historico["Situação"].isin(
+                ["APROVADO POR MÉDIA", "DISPENSADO", "APROVADO"]
+            ),
+            ["Média"],
         ]
 
 
@@ -38,6 +43,28 @@ class SIGAA:
         self.curriculo = self.GetCurriculo()
 
     def _SIGAA_Init(self):
+        data_path = "data"
+        data_file = os.path.join(data_path, "myData.json")
+        myDataPath = os.path.join("data", "myData.json")
+        dados_iniciais = {
+            "wrd": "",
+            "usr": "",
+            "Obsidian_path": "",
+        }
+        os.makedirs(data_path, exist_ok=True)
+        # Cria o arquivo JSON se não existir
+        if not os.path.exists(data_file):
+            with open(data_file, "w", encoding="utf-8") as f:
+                json.dump(dados_iniciais, f, indent=4, ensure_ascii=False)
+                wait_password = True
+            print("Arquivo myData.json criado com dados padrão.")
+        else:
+            with open("data/myData.json", "r", encoding="utf-8") as f:
+                myData = json.load(f)
+                f.close()
+            if myData["usr"] != "" and myData["wrd"] != "":
+                wait_password = False
+
         self.driver = webdriver.Chrome(options=Options().add_argument("--incognito"))
         self.driver.get("https://www.siga.univasf.edu.br/univasf/")
         self.driver.implicitly_wait(0.5)
@@ -46,9 +73,26 @@ class SIGAA:
         if self.driver.title == "SIG@UNIVASF":
             try:
                 while 1:
-                    # Esperar o usuário entrar CPF/Senha
-                    self.driver.find_element(by=By.ID, value="cpf")
-                    self.driver.implicitly_wait(1)
+                    if wait_password:
+                        # Esperar o usuário entrar CPF/Senha
+                        self.driver.find_element(by=By.ID, value="cpf")
+                        self.driver.implicitly_wait(1)
+                    else:
+                        user_input = self.driver.find_element(
+                            By.XPATH, '//input[@id="cpf" and @type="text"]'
+                        )
+                        user_input.clear()
+                        user_input.send_keys(myData["usr"])
+                        senha_input = self.driver.find_element(
+                            By.XPATH, '//input[@id="txtPassword" and @type="password"]'
+                        )
+                        senha_input.clear()
+                        senha_input.send_keys(myData["wrd"])
+                        botao_entrar = self.driver.find_element(
+                            By.XPATH, '//input[@id="btnEntrar" and @type="submit"]'
+                        )
+                        botao_entrar.click()
+
             except:
                 self._SIGAAON = True
                 print("Login OK")

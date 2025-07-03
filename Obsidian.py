@@ -2,36 +2,78 @@ import pandas as pd
 from typing import Literal
 import os
 import re
-import paths
 from SIGAA import SIGAA
+import ast
+import json
+from pathlib import Path
 
 
 class Obsidian:
-    def __init__(self, folder=f"Obsidian\\", gradeDF=None, historicoDF=None):
-        self.folder = folder
-        if not os.path.exists(self.folder):
-            # Cria diretório caso não exista
-            os.makedirs(self.folder)
-            os.makedirs(f"{self.folder}Subjects")
-            if gradeDF is None:
-                raise KeyError(AttributeError)
+    def __init__(self, folder="Obsidian", gradeDF=None, historicoDF=None):
+        self.folder = os.path.abspath(folder)  # Garante caminho absoluto
+        self.subjects_path = os.path.join(self.folder, "Subjects")
+
+        # Cria a pasta principal e a subpasta 'Subjects'
+        os.makedirs(self.subjects_path, exist_ok=True)
+
+        if gradeDF is None and not os.listdir(self.subjects_path):
+            raise KeyError(AttributeError)
+
+        if gradeDF is not None:
             self.perfilToMD(gradeDF)
-        elif gradeDF is None:
-            self.getMD()
         else:
-            self.perfilToMD(gradeDF)
+            self.getMD()
+
         self.subjDF = self.getSubjectsDF()
 
         # Inclui Histórico no DF
         if historicoDF is not None:
-            self.subjDF = pd.concat(
-                [self.subjDF, historicoDF.aprovadas.T.fillna("APV")]
+            historicoDF.aprovadas = historicoDF.aprovadas.fillna("APV")
+            colunas_subj = set(self.subjDF.columns)
+            colunas_historico = set(historicoDF.aprovadas.T.columns)
+            # Colunas exatamente iguais
+            colunas_comuns = list(colunas_subj & colunas_historico)
+            colunas_nao_comuns = list(colunas_historico - set(colunas_comuns))
+            self.equivalencias = {}
+            for col, val in self.subjDF.loc["Equivalências"].items():
+                if isinstance(val, list) and val:  # está como lista com string dentro
+                    try:
+                        self.equivalencias[col] = val
+                    except Exception as e:
+                        print(
+                            f"Erro ao interpretar equivalência de '{col}': {val} -> {e}"
+                        )
+            # Mapeia colunas não comuns para suas equivalentes
+            mapa_equivalencias = {}
+
+            for col_historico in colunas_nao_comuns:
+                for col_subj, equivalentes in self.equivalencias.items():
+                    if col_historico in equivalentes:
+                        mapa_equivalencias[col_historico] = col_subj
+                        break  # para no primeiro equivalente encontrado
+            # Cria uma cópia e renomeia as colunas equivalentes
+            historico_renomeado = historicoDF.aprovadas.T.rename(
+                columns=mapa_equivalencias
             )
 
+            # Atualiza lista de colunas que agora são comuns
+            colunas_finais = list(
+                set(self.subjDF.columns) & set(historico_renomeado.columns)
+            )
+
+            # Filtra ambos os DataFrames
+            df1 = self.subjDF[colunas_finais]
+            df2 = historico_renomeado[colunas_finais]
+
+            # Concatena os DataFrames
+            self.subjDF = pd.concat([self.subjDF, df2])
         self.dfToCanvas()
 
-    # Cria subject.md a partir da grade no Excel
     def perfilToMD(self, excelDF):
+        # Remove todos os arquivos .md antigos na pasta Subjects
+        for file in os.listdir(self.subjects_path):
+            if file.endswith(".md"):
+                os.remove(os.path.join(self.subjects_path, file))
         self.subjects = [
             ObsidianMD(excelDF.loc[subj], how="fromExcel") for subj in excelDF.T
         ]
@@ -50,7 +92,9 @@ class Obsidian:
         return self.subjects
 
     def dfToCanvas(self):
-        self.canvas = ObsidianCanvas(self.subjDF, folder=self.folder)
+        self.canvas = ObsidianCanvas(
+            self.subjDF, folder=self.folder, subjFolder=self.subjects_path
+        )
 
     def getSubjectsDF(self):
         subjDF = pd.DataFrame(
@@ -79,17 +123,19 @@ class Obsidian:
     def _saveMD(self):
         for subject in self.subjects:
             with open(
-                f"{self.folder}Subjects\\{subject.nome}.md", "w", encoding="utf-8"
+                os.path.join(self.subjects_path, f"{subject.nome}.md"),
+                "w",
+                encoding="utf-8",
             ) as f:
                 f.write(subject.MD)
 
 
 class ObsidianMD(Obsidian):
-    def __init__(self, subject, how: str, path=f"Obsidian\\Subjects"):
+    def __init__(self, subject, how: str, path=os.path.join("Obsidian", "Subjects")):
         if how == "fromMD":
             with open(path, "r", encoding="utf-8") as f:
                 self.MD = f.read()
-                self.nome = path.split("\\")[-1].replace(".md", "")
+                self.nome = os.path.basename(path).replace(".md", "")
                 self.mdToSubject()
 
         elif how == "fromExcel":
@@ -170,8 +216,14 @@ class ObsidianMD(Obsidian):
 
 
 class ObsidianCanvas(Obsidian):
-    def __init__(self, subjDF, folder=f"Obsidian"):
-        self.folder = folder
+    def __init__(
+        self,
+        subjDF,
+        folder=f"Obsidian",
+        subjFolder=os.path.join("Obsidian", "Subjects"),
+    ):
+        self.folder = os.path.abspath(folder)
+        self.subjects_path = os.path.abspath(subjFolder)
         self.CANVAS_Y = [0] * 11
         self.Nodes = {}
         self.Edges = {}
@@ -240,9 +292,9 @@ class ObsidianCanvas(Obsidian):
                 # Criar uma série pandas com a soma dos pré-requisitos para cada assunto no período
                 subjects_series = pd.Series(
                     {
-                        subject: sortedSubjects[subject]
-                        if subject in sortedSubjects
-                        else 0
+                        subject: (
+                            sortedSubjects[subject] if subject in sortedSubjects else 0
+                        )
                         for subject in subjects_in_period
                     }
                 )
@@ -288,7 +340,7 @@ class ObsidianCanvas(Obsidian):
                         y=self.Nodes[node]["y"],
                         color=self.Nodes[node]["color"],
                         nome=self.Nodes[node]["nome"],
-                        folder=f"Subjects/",
+                        folder=self.subjects_path,
                     )
                     for node in self.Nodes
                 ]
@@ -307,13 +359,61 @@ class ObsidianCanvas(Obsidian):
                 ]
             ),
         )
-        with open(f"{self.folder}PR03.canvas", "w", encoding="utf-8") as f:
+        with open(os.path.join(self.folder, "PE03.canvas"), "w", encoding="utf-8") as f:
             f.write(subjectCanva)
+        missingCanva = """{
+        "nodes":[
+                %s
+            ],
+        "edges":[
+                %s
+            ]
+        }""" % (
+            ",\n\t\t".join(
+                [
+                    ObsidianCanvas._saveNode(
+                        id=self.Nodes[node]["id"],
+                        x=self.Nodes[node]["x"],
+                        y=self.Nodes[node]["y"],
+                        color=self.Nodes[node]["color"],
+                        nome=self.Nodes[node]["nome"],
+                        folder=self.subjects_path,
+                    )
+                    for node in self.Nodes
+                    if node not in self.aprovadasList
+                ]
+            ),
+            ",\n\t\t".join(
+                [
+                    self._saveEdge(
+                        id=edge.replace(" ", ""),
+                        fromNode=self.Edges[edge]["fromNode"],
+                        fromSide=self.Edges[edge]["fromSide"],
+                        toNode=self.Edges[edge]["toNode"],
+                        toSide=self.Edges[edge]["toSide"],
+                        color=self.Edges[edge]["color"],
+                    )
+                    for edge in self.Edges
+                ]
+            ),
+        )
+        with open(
+            os.path.join(self.folder, "Faltantes.canvas"), "w", encoding="utf-8"
+        ) as f:
+            f.write(missingCanva)
 
     @staticmethod
     def _saveNode(
-        id: str, x: int, y: int, color=0, nome: str = "", folder=f"Obsidian\\Subjects\\"
+        id: str,
+        x: int,
+        y: int,
+        color=0,
+        nome: str = "",
+        folder=os.path.join("Obsidian", "Subjects"),
     ):
+        file_path = os.path.join(Path(*Path(folder).parts[-3:]), f"{id}.md").replace(
+            "\\", "/"
+        )
         fitID = id.split(" ")
         caracteresLinha = 0
         height = 140
@@ -327,7 +427,7 @@ class ObsidianCanvas(Obsidian):
                 height += 40
                 caracteresLinha = tamanho_palavra + 1  # +1 para o espaço
 
-        return f'{{"id":"{id}","type":"file","file":"{folder}{id}.md","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
+        return f'{{"id":"{id}","type":"file","file":"{file_path}","width":440,"height":{height},"color":"{color}","x":{x},"y":{y}}}'
 
     @staticmethod
     def _saveEdge(
@@ -342,11 +442,17 @@ class ObsidianCanvas(Obsidian):
 
 
 if __name__ == "__main__":
+    if os.path.exists("data/myData.json"):
+        wait_password = False
+        with open("data/myData.json", "r", encoding="utf-8") as f:
+            path = json.load(f)["Obsidian_path"]
+            f.close()
     siga = SIGAA()
-
-    obsidian = Obsidian(
-        gradeDF=siga.curriculo.df,
-        historicoDF=siga.historico,
-    )
+    if path != "":
+        obsidian = Obsidian(
+            gradeDF=siga.curriculo.df, historicoDF=siga.historico, folder=path
+        )
+    else:
+        obsidian = Obsidian(gradeDF=siga.curriculo.df, historicoDF=siga.historico)
 
     ...
