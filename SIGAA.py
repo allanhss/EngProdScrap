@@ -143,7 +143,7 @@ class SIGAA:
     def GetCurriculo(self, grade="PRO03"):
         try:
             if datetime.fromtimestamp(Path(f"data\{grade}.xlsx").stat().st_mtime) > (
-                datetime.now() - timedelta(days=7)
+                datetime.now() - timedelta(days=1)
             ):
                 return PerfilCurricular(
                     pd.read_excel(f"data\{grade}.xlsx", index_col=0)
@@ -194,7 +194,7 @@ class SIGAA:
     def GetHistorico(self, file="data\Historico.xlsx"):
         try:
             if datetime.fromtimestamp(Path(file).stat().st_mtime) > (
-                datetime.now() - timedelta(days=7)
+                datetime.now() - timedelta(days=1)
             ):
                 return Historico(pd.read_excel(file, index_col=0))
 

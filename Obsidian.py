@@ -67,6 +67,9 @@ class Obsidian:
 
             # Concatena os DataFrames
             self.subjDF = pd.concat([self.subjDF, df2])
+        self.subjDF[list(set(self.subjDF.columns) - set(df2.columns))].T.to_csv(
+            "data/Faltantes.csv", encoding="utf-8"
+        )
         self.dfToCanvas()
 
     def perfilToMD(self, excelDF):
